@@ -52,7 +52,16 @@ class Blockchain{
     // Adding block object to chain
     this.chain.push(newBlock);
     // Store newBlock in LevelDB
-    this.addLevelDBData(newBlock.height, newBlock);
+    this.addDataToLevelDB(newBlock);
+  }
+
+  // Add data to levelDB with value
+  addDataToLevelDB(block) {
+    var key = block.height;
+    // Add data to levelDB with key/value pair
+    db.put(key, JSON.stringify(block).toString(), function(err) {
+      if (err) return console.log('Block ' + key + ' submission failed', err);
+    });
   }
 
   // Get block height
@@ -62,8 +71,14 @@ class Blockchain{
 
     // get block
     getBlock(blockHeight){
+      var block;
       // return object as a single string
-      return JSON.parse(JSON.stringify(this.chain[blockHeight]));
+      db.get(blockHeight, function(err, value) {
+        if (err) return console.log('Not found!', err);
+        console.log('Value = ' + value);
+        block = JSON.parse(JSON.stringify(value));
+      });
+      return block;
     }
 
     // validate block
@@ -83,13 +98,6 @@ class Blockchain{
           console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
           return false;
         }
-    }
-
-    // Add data to levelDB with key/value pair
-    addLevelDBData(key,value){
-      db.put(key, value, function(err) {
-      if (err) return console.log('Block ' + key + ' submission failed', err);
-      })
     }
 
    // Validate blockchain
