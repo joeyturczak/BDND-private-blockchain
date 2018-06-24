@@ -1,3 +1,11 @@
+/* ===== Persist data with LevelDB ===================================
+|  Learn more: level: https://github.com/Level/level     |
+|  =============================================================*/
+
+const level = require('level');
+const chainDB = './chaindata';
+const db = level(chainDB);
+
 /* ===== SHA256 with Crypto-js ===============================
 |  Learn more: Crypto-js: https://github.com/brix/crypto-js  |
 |  =========================================================*/
@@ -42,7 +50,9 @@ class Blockchain{
     // Block hash with SHA256 using newBlock and converting to a string
     newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
     // Adding block object to chain
-  	this.chain.push(newBlock);
+    this.chain.push(newBlock);
+    // Store newBlock in LevelDB
+    this.addLevelDBData(newBlock.height, newBlock);
   }
 
   // Get block height
@@ -73,6 +83,13 @@ class Blockchain{
           console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
           return false;
         }
+    }
+
+    // Add data to levelDB with key/value pair
+    addLevelDBData(key,value){
+      db.put(key, value, function(err) {
+      if (err) return console.log('Block ' + key + ' submission failed', err);
+      })
     }
 
    // Validate blockchain
