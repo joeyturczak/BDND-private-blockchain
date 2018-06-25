@@ -19,11 +19,11 @@ const SHA256 = require('crypto-js/sha256');
 
 class Block{
 	constructor(data){
-     this.hash = "",
+     this.hash = '',
      this.height = 0,
      this.body = data,
      this.time = 0,
-     this.previousBlockHash = ""
+     this.previousBlockHash = ''
     }
 }
 
@@ -52,52 +52,51 @@ class Blockchain{
     // Adding block object to chain
     this.chain.push(newBlock);
     // Store newBlock in LevelDB
-    this.addDataToLevelDB(newBlock);
-  }
-
-  // Add data to levelDB with value
-  addDataToLevelDB(block) {
-    var key = block.height;
-    // Add data to levelDB with key/value pair
-    db.put(key, JSON.stringify(block).toString(), function(err) {
-      if (err) return console.log('Block ' + key + ' submission failed', err);
-    });
+    addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
   }
 
   // Get block height
     getBlockHeight(){
-      return this.chain.length-1;
+      let i = 0;
+      db.createReadStream().on('data', function (data) {
+          i++;
+        })
+        .on('error', function (err) {
+          console.log('Oh my!', err);
+        })
+        .on('close', function () {
+          console.log('Height: ' + (i-1).toString());
+        })
     }
 
     // get block
     getBlock(blockHeight){
-      var block;
       // return object as a single string
-      db.get(blockHeight, function(err, value) {
-        if (err) return console.log('Not found!', err);
-        console.log('Value = ' + value);
-        block = JSON.parse(JSON.stringify(value));
+      getDataFromLevelDB(blockHeight, function(value) {
+        console.log(JSON.parse(value));
       });
-      return block;
     }
+
+
 
     // validate block
     validateBlock(blockHeight){
-      // get block object
-      let block = this.getBlock(blockHeight);
-      // get block hash
-      let blockHash = block.hash;
-      // remove block hash to test block integrity
-      block.hash = '';
-      // generate block hash
-      let validBlockHash = SHA256(JSON.stringify(block)).toString();
-      // Compare
-      if (blockHash===validBlockHash) {
-          return true;
+      getDataFromLevelDB(blockHeight, function(value) {
+        // get block object
+        let block = JSON.parse(value);
+        // get block hash
+        let blockHash = block.hash;
+        // remove block hash to test block integrity
+        block.hash = '';
+        // generate block hash
+        let validBlockHash = SHA256(JSON.stringify(block)).toString();
+        // Compare
+        if (blockHash===validBlockHash) {
+          console.log('Block validated');
         } else {
           console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
-          return false;
         }
+      });
     }
 
    // Validate blockchain
@@ -120,4 +119,19 @@ class Blockchain{
         console.log('No errors detected');
       }
     }
+}
+
+// Add data to levelDB with key/value pair
+function addDataToLevelDB(key, value) {
+  db.put(key, value, function(err) {
+    if (err) return console.log('Block ' + key + ' submission failed', err);
+  });
+}
+
+function getDataFromLevelDB(key, callback) {
+  db.get(key, function(err, value) {
+    if (err) return console.log('Not found!', err);
+    console.log('Value = ' + value);
+    callback(value);
+  });
 }
