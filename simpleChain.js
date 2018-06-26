@@ -102,6 +102,17 @@ class Blockchain{
    // Validate blockchain
     validateChain(){
       let errorLog = [];
+      let i = 0;
+      db.createReadStream().on('data', function (data) {
+        i++;
+      })
+      .on('error', function (err) {
+        console.log('Oh my!', err);
+      })
+      .on('close', function () {
+        console.log('Height: ' + (i-1).toString());
+      })
+      
       for (var i = 0; i < this.chain.length-1; i++) {
         // validate block
         if (!this.validateBlock(i))errorLog.push(i);
@@ -128,6 +139,7 @@ function addDataToLevelDB(key, value) {
   });
 }
 
+// Get data from levelDB with key
 function getDataFromLevelDB(key, callback) {
   db.get(key, function(err, value) {
     if (err) return console.log('Not found!', err);
@@ -135,3 +147,5 @@ function getDataFromLevelDB(key, callback) {
     callback(value);
   });
 }
+
+// Add function with callback for validating blocks
