@@ -33,47 +33,46 @@ class Block{
 
 class Blockchain{
   constructor(){
-    this.chain = [];
     this.addBlock(new Block("First block in the chain - Genesis block"));
   }
 
   // Add new block
   addBlock(newBlock){
-    // Block height
-    newBlock.height = this.chain.length;
-    // UTC timestamp
-    newBlock.time = new Date().getTime().toString().slice(0,-3);
-    // previous block hash
-    if(this.chain.length>0){
-      newBlock.previousBlockHash = this.chain[this.chain.length-1].hash;
-    }
-    // Block hash with SHA256 using newBlock and converting to a string
-    newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
-    // Adding block object to chain
-    this.chain.push(newBlock);
-    // Store newBlock in LevelDB
-    addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
+    getBlockHeightFromLevelDB(function(height) {
+      // Block height
+      newBlock.height = (height + 1);
+      // UTC timestamp
+      newBlock.time = new Date().getTime().toString().slice(0,-3);
+      // previous block hash
+      if(height>=0){
+        getDataFromLevelDB(height, function(data) {
+          newBlock.previousBlockHash = JSON.parse(data).hash;
+          // Block hash with SHA256 using newBlock and converting to a string
+          newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
+          // Store newBlock in LevelDB
+          addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
+        });
+      } else {
+        // Block hash with SHA256 using newBlock and converting to a string
+        newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
+        // Store newBlock in LevelDB
+        addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
+      }
+    });
   }
 
   // Get block height
     getBlockHeight(){
-      let i = 0;
-      db.createReadStream().on('data', function (data) {
-          i++;
-        })
-        .on('error', function (err) {
-          console.log('Oh my!', err);
-        })
-        .on('close', function () {
-          console.log('Height: ' + (i-1).toString());
-        })
+      getBlockHeightFromLevelDB(function(height) {
+        console.log('Height: ' + (height).toString());
+      });
     }
 
     // get block
     getBlock(blockHeight){
       // return object as a single string
-      getDataFromLevelDB(blockHeight, function(value) {
-        console.log(JSON.parse(value));
+      getDataFromLevelDB(blockHeight, function(block) {
+        console.log(JSON.parse(block));
       });
     }
 
@@ -81,20 +80,9 @@ class Blockchain{
 
     // validate block
     validateBlock(blockHeight){
-      getDataFromLevelDB(blockHeight, function(value) {
-        // get block object
-        let block = JSON.parse(value);
-        // get block hash
-        let blockHash = block.hash;
-        // remove block hash to test block integrity
-        block.hash = '';
-        // generate block hash
-        let validBlockHash = SHA256(JSON.stringify(block)).toString();
-        // Compare
-        if (blockHash===validBlockHash) {
+      validateBlockFromLevelDB(blockHeight, function(isValid) {
+        if(isValid) {
           console.log('Block validated');
-        } else {
-          console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
         }
       });
     }
@@ -102,33 +90,37 @@ class Blockchain{
    // Validate blockchain
     validateChain(){
       let errorLog = [];
+      let chain = [];
       let i = 0;
       db.createReadStream().on('data', function (data) {
+        // validate block
+        validateBlockFromLevelDB(i, function(value) {
+          if(!value) {
+            errorLog.push(i);
+          }
+        });
+        chain.push(data.value);
         i++;
       })
       .on('error', function (err) {
         console.log('Oh my!', err);
       })
       .on('close', function () {
-        console.log('Height: ' + (i-1).toString());
-      })
-      
-      for (var i = 0; i < this.chain.length-1; i++) {
-        // validate block
-        if (!this.validateBlock(i))errorLog.push(i);
-        // compare blocks hash link
-        let blockHash = this.chain[i].hash;
-        let previousHash = this.chain[i+1].previousBlockHash;
-        if (blockHash!==previousHash) {
-          errorLog.push(i);
+        for (var i = 0; i < chain.length-1; i++) {
+          // compare blocks hash link
+          let blockHash = JSON.parse(chain[i]).hash;
+          let previousHash = JSON.parse(chain[i+1]).previousBlockHash;
+          if (blockHash!==previousHash) {
+            errorLog.push(i);
+          }
         }
-      }
-      if (errorLog.length>0) {
-        console.log('Block errors = ' + errorLog.length);
-        console.log('Blocks: '+errorLog);
-      } else {
-        console.log('No errors detected');
-      }
+        if (errorLog.length>0) {
+          console.log('Block errors = ' + errorLog.length);
+          console.log('Blocks: '+errorLog);
+        } else {
+          console.log('No errors detected');
+        }
+      });
     }
 }
 
@@ -143,9 +135,41 @@ function addDataToLevelDB(key, value) {
 function getDataFromLevelDB(key, callback) {
   db.get(key, function(err, value) {
     if (err) return console.log('Not found!', err);
-    console.log('Value = ' + value);
     callback(value);
   });
 }
 
-// Add function with callback for validating blocks
+// Validate block in levelDB with key
+function validateBlockFromLevelDB(key, callback) {
+  getDataFromLevelDB(key, function(value) {
+    // get block object
+    let block = JSON.parse(value);
+    // get block hash
+    let blockHash = block.hash;
+    // remove block hash to test block integrity
+    block.hash = '';
+    // generate block hash
+    let validBlockHash = SHA256(JSON.stringify(block)).toString();
+    // Compare
+    if (blockHash===validBlockHash) {
+      callback(true);
+    } else {
+      callback(false);
+      console.log('Block #'+key+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
+    }
+  });
+}
+
+// Get block height from leveDB
+function getBlockHeightFromLevelDB(callback) {
+  let i = 0;
+  db.createReadStream().on('data', function (data) {
+      i++;
+    })
+    .on('error', function (err) {
+      console.log('Oh my!', err);
+    })
+    .on('close', function () {
+      callback(i-1);
+    });
+}
