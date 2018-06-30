@@ -43,32 +43,30 @@ class Blockchain{
 
   // Add new block
   addBlock(newBlock){
-    getBlockHeightFromLevelDB(function(height) {
+    this.getBlockHeight().then(function(height) {
       // Block height
       newBlock.height = (height + 1);
       // UTC timestamp
       newBlock.time = new Date().getTime().toString().slice(0,-3);
       // previous block hash
-      if(height>=0){
-        getDataFromLevelDB(height, function(data) {
-          newBlock.previousBlockHash = JSON.parse(data).hash;
-          // Block hash with SHA256 using newBlock and converting to a string
-          newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
-          // Store newBlock in LevelDB
-          addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
-        });
-      } else {
-        // Block hash with SHA256 using newBlock and converting to a string
-        newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
-        // Store newBlock in LevelDB
-        addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
-      }
+      return height;
+    }).then(function(height) {
+      // Get previous block
+      return getDataFromLevelDB(height);
+    }).then(function(previousBlock) {
+      newBlock.previousBlockHash = JSON.parse(previousBlock).hash;
+      // Block hash with SHA256 using newBlock and converting to a string
+      newBlock.hash = SHA256(JSON.stringify(newBlock)).toString();
+      // Store newBlock in LevelDB
+      addDataToLevelDB(newBlock.height, JSON.stringify(newBlock).toString());
+    }).catch(function() {
+      console.log('Error adding block');
     });
   }
 
   // Get block height
     getBlockHeight(){
-      return new Promise(function(resolve, reject) {
+      return new Promise((resolve, reject) => {
         let i = 0;
         db.createReadStream().on('data', function (data) {
           i++;
@@ -148,19 +146,8 @@ function addDataToLevelDB(key, value) {
 }
 
 // Get data from levelDB with key
-function getDataFromLevelDB(key, callback) {
-  db.get(key, function(err, value) {
-    if (err) return console.log('Not found!', err);
-    callback(value);
-  });
-}
-
-// Get data from levelDB with key
 function getDataFromLevelDB(key) {
-  return db.get(key, function(err, value) {
-    if (err) return console.log('Not found!', err);
-    // callback(value);
-  });
+  return db.get(key);
 }
 
 // Validate block in levelDB with key
