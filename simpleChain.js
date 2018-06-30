@@ -68,8 +68,19 @@ class Blockchain{
 
   // Get block height
     getBlockHeight(){
-      getBlockHeightFromLevelDB(function(height) {
-        console.log('Height: ' + (height).toString());
+      return new Promise(function(resolve, reject) {
+        let i = 0;
+        db.createReadStream().on('data', function (data) {
+          i++;
+        })
+        .on('error', function (err) {
+          console.log('Oh my!', err);
+        })
+        .on('close', function () {
+          var height = i - 1;
+          console.log('Height: ' + (height).toString())
+          resolve(height);
+        });
       });
     }
 
@@ -144,6 +155,14 @@ function getDataFromLevelDB(key, callback) {
   });
 }
 
+// Get data from levelDB with key
+function getDataFromLevelDB(key) {
+  return db.get(key, function(err, value) {
+    if (err) return console.log('Not found!', err);
+    // callback(value);
+  });
+}
+
 // Validate block in levelDB with key
 function validateBlockFromLevelDB(key, callback) {
   getDataFromLevelDB(key, function(value) {
@@ -163,18 +182,4 @@ function validateBlockFromLevelDB(key, callback) {
       console.log('Block #'+key+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
     }
   });
-}
-
-// Get block height from leveDB
-function getBlockHeightFromLevelDB(callback) {
-  let i = 0;
-  db.createReadStream().on('data', function (data) {
-      i++;
-    })
-    .on('error', function (err) {
-      console.log('Oh my!', err);
-    })
-    .on('close', function () {
-      callback(i-1);
-    });
 }
