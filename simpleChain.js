@@ -33,7 +33,12 @@ class Block{
 
 class Blockchain{
   constructor(){
-    this.addBlock(new Block("First block in the chain - Genesis block"));
+    // Create genesis block
+    let genesisBlock = new Block("First block in the chain - Genesis block");
+    genesisBlock.height = 0;
+    genesisBlock.time = 1530393985;
+    genesisBlock.hash = SHA256(JSON.stringify(genesisBlock)).toString();
+    addDataToLevelDB(genesisBlock.height, JSON.stringify(genesisBlock).toString());
   }
 
   // Add new block
