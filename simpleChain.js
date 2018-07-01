@@ -85,7 +85,7 @@ class Blockchain{
     // get block
     getBlock(blockHeight){
       // return object as a single string
-      getDataFromLevelDB(blockHeight, function(block) {
+      return getDataFromLevelDB(blockHeight).then(function(block) {
         console.log(JSON.parse(block));
       });
     }
@@ -94,10 +94,27 @@ class Blockchain{
 
     // validate block
     validateBlock(blockHeight){
-      validateBlockFromLevelDB(blockHeight, function(isValid) {
-        if(isValid) {
-          console.log('Block validated');
-        }
+      return new Promise((resolve, reject) => {
+        getDataFromLevelDB(blockHeight).then(function(data) {
+          // get block object
+          let block = JSON.parse(data);
+          // get block hash
+          let blockHash = block.hash;
+          // remove block hash to test block integrity
+          block.hash = '';
+          // generate block hash
+          let validBlockHash = SHA256(JSON.stringify(block)).toString();
+          // Compare
+          if (blockHash===validBlockHash) {
+            console.log('Block validated');
+            resolve(true);
+          } else {
+            console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
+            resolve(false);
+          }
+        }).catch(function() {
+          console.log('Error: Could not find block');
+        });
       });
     }
 
@@ -148,25 +165,4 @@ function addDataToLevelDB(key, value) {
 // Get data from levelDB with key
 function getDataFromLevelDB(key) {
   return db.get(key);
-}
-
-// Validate block in levelDB with key
-function validateBlockFromLevelDB(key, callback) {
-  getDataFromLevelDB(key, function(value) {
-    // get block object
-    let block = JSON.parse(value);
-    // get block hash
-    let blockHash = block.hash;
-    // remove block hash to test block integrity
-    block.hash = '';
-    // generate block hash
-    let validBlockHash = SHA256(JSON.stringify(block)).toString();
-    // Compare
-    if (blockHash===validBlockHash) {
-      callback(true);
-    } else {
-      callback(false);
-      console.log('Block #'+key+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
-    }
-  });
 }
