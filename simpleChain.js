@@ -65,94 +65,102 @@ class Blockchain{
   }
 
   // Get block height
-    getBlockHeight(){
-      return new Promise((resolve, reject) => {
-        let i = 0;
-        db.createReadStream().on('data', function (data) {
-          i++;
-        })
-        .on('error', function (err) {
-          console.log('Oh my!', err);
-        })
-        .on('close', function () {
-          var height = i - 1;
-          console.log('Height: ' + (height).toString())
-          resolve(height);
-        });
-      });
-    }
-
-    // get block
-    getBlock(blockHeight){
-      // return object as a single string
-      return getDataFromLevelDB(blockHeight).then(function(block) {
-        console.log(JSON.parse(block));
-      });
-    }
-
-
-
-    // validate block
-    validateBlock(blockHeight){
-      return new Promise((resolve, reject) => {
-        getDataFromLevelDB(blockHeight).then(function(data) {
-          // get block object
-          let block = JSON.parse(data);
-          // get block hash
-          let blockHash = block.hash;
-          // remove block hash to test block integrity
-          block.hash = '';
-          // generate block hash
-          let validBlockHash = SHA256(JSON.stringify(block)).toString();
-          // Compare
-          if (blockHash===validBlockHash) {
-            console.log('Block validated');
-            resolve(true);
-          } else {
-            console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
-            resolve(false);
-          }
-        }).catch(function() {
-          console.log('Error: Could not find block');
-        });
-      });
-    }
-
-   // Validate blockchain
-    validateChain(){
-      let errorLog = [];
-      let chain = [];
+  getBlockHeight(){
+    return new Promise((resolve, reject) => {
       let i = 0;
       db.createReadStream().on('data', function (data) {
-        // validate block
-        validateBlockFromLevelDB(i, function(value) {
-          if(!value) {
-            errorLog.push(i);
-          }
-        });
-        chain.push(data.value);
         i++;
       })
       .on('error', function (err) {
         console.log('Oh my!', err);
       })
       .on('close', function () {
-        for (var i = 0; i < chain.length-1; i++) {
+        var height = i - 1;
+        console.log('Height: ' + (height).toString())
+        resolve(height);
+      });
+    });
+  }
+
+  // get block
+  getBlock(blockHeight){
+    return getDataFromLevelDB(blockHeight).then(function(block) {
+      // print block as a single string
+      console.log(JSON.parse(block));
+      return block;
+    });
+  }
+
+  // validate block
+  validateBlock(blockHeight){
+    return new Promise((resolve, reject) => {
+      this.getBlock(blockHeight).then(function(data) {
+        // get block object
+        let block = JSON.parse(data);
+        // get block hash
+        let blockHash = block.hash;
+        // remove block hash to test block integrity
+        block.hash = '';
+        // generate block hash
+        let validBlockHash = SHA256(JSON.stringify(block)).toString();
+        // Compare
+        if (blockHash===validBlockHash) {
+          console.log('Block validated');
+          resolve(true);
+        } else {
+          console.log('Block #'+blockHeight+' invalid hash:\n'+blockHash+'<>'+validBlockHash);
+          resolve(false);
+        }
+      }).catch(function() {
+        console.log('Error: Could not find block');
+      });
+    });
+  }
+
+  // Validate blockchain
+  validateChain(){
+    let errorLog = [];
+    var that = this;
+
+    that.getBlockHeight().then(function(height) {
+      var currentBlock;
+      var nextBlock;
+      
+      for (let i = 0; i < height; i++) {
+        that.getBlock(i).then(function(block) {
+          // Get block
+          currentBlock = JSON.parse(block);
+          return that.getBlock(i + 1);
+        }).then(function(block) {
+          // Get next block in chain
+          nextBlock = JSON.parse(block);
           // compare blocks hash link
-          let blockHash = JSON.parse(chain[i]).hash;
-          let previousHash = JSON.parse(chain[i+1]).previousBlockHash;
-          if (blockHash!==previousHash) {
+          if(currentBlock.hash !== nextBlock.hash) {
             errorLog.push(i);
           }
-        }
-        if (errorLog.length>0) {
-          console.log('Block errors = ' + errorLog.length);
-          console.log('Blocks: '+errorLog);
-        } else {
-          console.log('No errors detected');
-        }
-      });
-    }
+          return that.validateBlock(i);
+        }).then(function(valid) {
+          if(!valid) {
+            errorLog.push(i);
+          }
+        });
+      }
+      return that.validateBlock(height);
+    }).then(function(valid) {
+      // validate final block
+      if(!valid) {
+        errorLog.push(height);
+      }
+    }).then(function() {
+      // print errors if any
+      if (errorLog.length > 0) {
+        console.log('Block errors = ' + errorLog.length);
+        console.log('Blocks: ' + errorLog);
+      } else {
+        console.log('No errors detected');
+      }
+    });
+  }
 }
 
 // Add data to levelDB with key/value pair
